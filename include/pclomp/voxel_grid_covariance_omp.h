@@ -39,7 +39,7 @@
 #define PCL_VOXEL_GRID_COVARIANCE_OMP_H_
 
 #include <pcl/pcl_macros.h>
-#include <pcl/filters/boost.h>
+#include <pcl/memory.h>  // pcl/filters/boost.h removed in PCL 1.12+
 #include <pcl/filters/voxel_grid.h>
 #include <map>
 #include <unordered_map>

@@ -41,7 +41,7 @@
 #define PCL_REGISTRATION_IMPL_GICP_OMP_HPP_
 
 #include <atomic>
-#include <pcl/registration/boost.h>
+#include <pcl/memory.h>  // pcl/registration/boost.h removed in PCL 1.12+
 #include <pcl/registration/exceptions.h>
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,7 @@ pclomp::GeneralizedIterativeClosestPoint<PointSource, PointTarget>::computeCovar
   std::vector<std::vector<float>> nn_dist_sq_array(omp_get_max_threads());
 
   #pragma omp parallel for
-  for(std::size_t i=0; i < cloud->size(); i++) {
+  for(int i = 0; i < static_cast<int>(cloud->size()); i++) {
     auto& nn_indices = nn_indices_array[omp_get_thread_num()];
     auto& nn_dist_sq = nn_dist_sq_array[omp_get_thread_num()];
 
@@ -423,7 +423,7 @@ pclomp::GeneralizedIterativeClosestPoint<PointSource, PointTarget>::computeTrans
     const Eigen::Matrix3d R = transform_R.topLeftCorner<3,3> ();
 
     #pragma omp parallel for
-    for (std::size_t i = 0; i < N; i++)
+    for (int i = 0; i < static_cast<int>(N); i++)
     {
       auto& nn_indices = nn_indices_array[omp_get_thread_num()];
       auto& nn_dists = nn_dists_array[omp_get_thread_num()];

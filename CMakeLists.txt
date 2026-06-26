@@ -11,8 +11,7 @@ else()
   set(CMAKE_CXX_FLAGS "-msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2")
 endif()
 
-# pcl 1.7 causes a segfault when it is built with debug mode
-set(CMAKE_BUILD_TYPE "RELEASE")
+# (removed hardcoded RELEASE — PCL 1.7 debug segfault no longer relevant with PCL 1.15+)
 
 find_package(PCL 1.7 REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
@@ -29,102 +28,107 @@ if (OPENMP_FOUND)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 endif()
 
-if($ENV{ROS_VERSION} EQUAL 1)
-# ROS1
-find_package(catkin REQUIRED COMPONENTS
-  roscpp
-  pcl_ros
-)
+# ── Detect build mode ──────────────────────────────────────────────────────
+# Priority: standalone CMake > ROS1 > ROS2
+if(NOT DEFINED ENV{ROS_VERSION} OR "$ENV{ROS_VERSION}" STREQUAL "")
+  # ====================================================================
+  #  STANDALONE CMake mode (no ROS dependency — PCL + OpenMP only)
+  # ====================================================================
+  message(STATUS "ndt_omp: standalone mode (no ROS detected)")
 
-###################################
-## catkin specific configuration ##
-###################################
-catkin_package(
-  INCLUDE_DIRS include
-  LIBRARIES ndt_omp
-)
+  add_library(ndt_omp
+    src/pclomp/voxel_grid_covariance_omp.cpp
+    src/pclomp/ndt_omp.cpp
+    src/pclomp/gicp_omp.cpp
+  )
 
-###########
-## Build ##
-###########
-include_directories(include)
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
+  target_include_directories(ndt_omp PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+  )
+  target_link_libraries(ndt_omp PUBLIC ${PCL_LIBRARIES})
 
-add_library(ndt_omp
-  src/pclomp/voxel_grid_covariance_omp.cpp
-  src/pclomp/ndt_omp.cpp
-  src/pclomp/gicp_omp.cpp
-)
+  if(OpenMP_CXX_FOUND)
+    target_link_libraries(ndt_omp PUBLIC OpenMP::OpenMP_CXX)
+    target_compile_options(ndt_omp PRIVATE ${OpenMP_CXX_FLAGS})
+  else()
+    message(WARNING "ndt_omp: OpenMP not found — will be single-threaded")
+  endif()
 
-add_executable(align
-  apps/align.cpp
-)
-add_dependencies(align
-  ndt_omp
-)
-target_link_libraries(align
-  ${catkin_LIBRARIES}
-  ${PCL_LIBRARIES}
-  ndt_omp
-)
+  install(TARGETS ndt_omp
+    EXPORT ndt_omp
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+  )
+  install(DIRECTORY include/pclomp
+    DESTINATION include)
 
-#############
-## INSTALL ##
-#############
+elseif($ENV{ROS_VERSION} EQUAL 1)
+  # ====================================================================
+  #  ROS1 mode
+  # ====================================================================
+  find_package(catkin REQUIRED COMPONENTS
+    roscpp
+    pcl_ros
+  )
 
-install(
-  TARGETS
-    ndt_omp
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-)
+  catkin_package(
+    INCLUDE_DIRS include
+    LIBRARIES ndt_omp
+  )
 
-# install headers
-install(DIRECTORY include/pclomp
-        DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})
+  include_directories(include)
+  include_directories(${catkin_INCLUDE_DIRS})
+
+  add_library(ndt_omp
+    src/pclomp/voxel_grid_covariance_omp.cpp
+    src/pclomp/ndt_omp.cpp
+    src/pclomp/gicp_omp.cpp
+  )
+
+  add_executable(align apps/align.cpp)
+  add_dependencies(align ndt_omp)
+  target_link_libraries(align ${catkin_LIBRARIES} ${PCL_LIBRARIES} ndt_omp)
+
+  install(TARGETS ndt_omp
+    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  )
+  install(DIRECTORY include/pclomp
+    DESTINATION ${CATKIN_GLOBAL_INCLUDE_DESTINATION})
 else()
+  # ====================================================================
+  #  ROS2 mode
+  # ====================================================================
+  find_package(ament_cmake_auto REQUIRED)
+  ament_auto_find_build_dependencies()
 
-# ROS2
-find_package(ament_cmake_auto REQUIRED)
-ament_auto_find_build_dependencies()
+  include_directories(include)
 
-###########
-## Build ##
-###########
-include_directories(include)
-include_directories(
-  ${catkin_INCLUDE_DIRS}
-)
+  add_library(ndt_omp
+    SHARED
+    src/pclomp/voxel_grid_covariance_omp.cpp
+    src/pclomp/ndt_omp.cpp
+    src/pclomp/gicp_omp.cpp
+  )
 
-add_library(ndt_omp
-  SHARED
-  src/pclomp/voxel_grid_covariance_omp.cpp
-  src/pclomp/ndt_omp.cpp
-  src/pclomp/gicp_omp.cpp
-)
+  ament_export_targets(ndt_omp HAS_LIBRARY_TARGET)
+  target_link_libraries(ndt_omp ${PCL_LIBRARIES})
 
-ament_export_targets(ndt_omp HAS_LIBRARY_TARGET)
+  if(OpenMP_CXX_FOUND)
+    target_link_libraries(ndt_omp OpenMP::OpenMP_CXX)
+  endif()
 
-target_link_libraries(ndt_omp ${PCL_LIBRARIES})
+  install(TARGETS ndt_omp
+    EXPORT ndt_omp
+    LIBRARY DESTINATION lib
+    ARCHIVE DESTINATION lib
+    RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
+  )
 
-if(OpenMP_CXX_FOUND)
-  target_link_libraries(ndt_omp OpenMP::OpenMP_CXX)
-else()
-  message(WARNING "OpenMP not found")
-endif()
-
-install(
-  TARGETS
-    ndt_omp
-  EXPORT ndt_omp
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-  RUNTIME DESTINATION bin
-  INCLUDES DESTINATION include
-)
-
-ament_auto_package()
+  ament_auto_package()
 endif()

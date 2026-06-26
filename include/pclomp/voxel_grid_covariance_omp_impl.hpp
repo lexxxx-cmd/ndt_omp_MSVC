@@ -39,7 +39,9 @@
 #define PCL_VOXEL_GRID_COVARIANCE_IMPL_OMP_H_
 
 #include <pcl/common/common.h>
-#include <pcl/filters/boost.h>
+#include <boost/mpl/size.hpp>  // PCL 1.12+ no longer includes this transitively
+#include <pcl/memory.h>  // pcl/filters/boost.h removed in PCL 1.12+
+#include <boost/random.hpp>  // was transitively included by pcl/filters/boost.h
 #include "voxel_grid_covariance_omp.h"
 #include <Eigen/Dense>
 #include <Eigen/Cholesky>
